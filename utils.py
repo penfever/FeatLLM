@@ -2,6 +2,7 @@
 import os
 import random
 import openai
+from together import Together
 import time
 import torch
 import json
@@ -10,6 +11,7 @@ import numpy as np
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
+from io import StringIO
 
 TASK_DICT = {
     'blood': "Did the person donate blood? Yes or no?",
@@ -76,24 +78,45 @@ def get_dataset(data_name, shot, seed):
     return df, X_train, X_test, y_train, y_test, default_target_attribute, label_list, categorical_indicator
 
 
-def query_gpt(text_list, api_key, max_tokens=30, temperature=0, max_try_num=10, model="gpt-3.5-turbo-0613"):
-    openai.api_key = api_key
+def query_gpt(text_list, api_key, max_tokens=30, temperature=0, max_try_num=10, model="gpt-3.5-turbo-0613", type="openai"):
+    if type == "openai":
+        openai.api_key = api_key
+    elif type == "together":
+        together = Together()
     result_list = []
     for prompt in tqdm(text_list):
         curr_try_num = 0
         while curr_try_num < max_try_num:
             try:
-                response = openai.ChatCompletion.create(
-                    model=model,
-                    messages=[{"role":"user", "content":prompt}],
-                    temperature = temperature,
-                    max_tokens = max_tokens,
-                    top_p = 1,
-                    request_timeout=100
-                )
-                result = response["choices"][0]["message"]["content"]
-                result_list.append(result)
-                break
+                if type == "openai":
+                    response = openai.ChatCompletion.create(
+                        model=model,
+                        messages=[{"role":"user", "content":prompt}],
+                        temperature = temperature,
+                        max_tokens = max_tokens,
+                        top_p = 1,
+                        request_timeout=100
+                    )
+                    result = response["choices"][0]["message"]["content"]
+                    result_list.append(result)
+                    break
+                elif type == "together":
+                    output = StringIO()
+                    stream = together.chat.completions.create(
+                        model=model,
+                        messages=[{"role":"user", "content":prompt}],
+                        temperature = temperature,
+                        max_tokens = max_tokens,
+                        top_p = 1,
+                        stop=["<|eot_id|>","<|eom_id|>"],
+                        stream=True
+                    )
+                    for chunk in stream:
+                        print(chunk.choices[0].delta.content or "", end="", flush=True, file=output)
+                    result = output.getvalue()
+                    output.close()
+                    result_list.append(result)
+                    break
             except openai.error.InvalidRequestError as e:
                 return [-1]
             except Exception as e:

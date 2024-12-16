@@ -1,0 +1,11 @@
+You are an expert. Given the task description and the list of features and data examples, please provide an answer to the Test prompt. Please respond only with your answer.
+
+Task: [TASK]
+
+Features:
+[FEATURES]
+
+Examples:
+[EXAMPLES]
+
+Test:
